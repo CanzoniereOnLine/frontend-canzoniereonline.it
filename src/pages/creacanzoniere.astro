@@ -1,0 +1,407 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Crea canzoniere" description="Componi il tuo canzoniere personalizzato e genera il PDF">
+  <div class="cc-app" x-data="canzoniereApp()" x-cloak>
+    <h1>Crea il tuo canzoniere</h1>
+
+    <p x-show="loading">Caricamento del catalogo…</p>
+    <p class="cc-error" x-show="loadError" x-text="loadError"></p>
+
+    <details class="cc-resume">
+      <summary>Riprendi un canzoniere esistente</summary>
+      <form @submit.prevent="checkJob(resumeJobId)">
+        <input
+          type="text"
+          x-model="resumeJobId"
+          placeholder="Incolla qui l'ID del job (job_id)"
+          aria-label="ID del job da riprendere"
+        />
+        <button type="submit">Verifica stato</button>
+      </form>
+      <p class="cc-error" x-show="resumeError" x-text="resumeError"></p>
+    </details>
+
+    <!-- Stato del job in corso / concluso -->
+    <div class="cc-job-panel" x-show="job">
+      <div class="cc-job-id">
+        Job: <code x-text="job && job.job_id"></code>
+      </div>
+
+      <ol class="cc-stepper">
+        <template x-for="(s, i) in steps" :key="s.key">
+          <li
+            :class="{ done: job && stepIndex(job.status) > i, active: job && stepIndex(job.status) === i }"
+            x-text="s.label"
+          ></li>
+        </template>
+      </ol>
+
+      <p x-show="job && job.status !== 'error'">
+        <span x-text="job && job.message"></span>
+        <span class="muted" x-show="job" x-text="'· ' + elapsed(job)"></span>
+      </p>
+      <p class="cc-error" x-show="job && job.status === 'error'" x-text="job && job.error"></p>
+      <p class="cc-error" x-show="jobError" x-text="jobError"></p>
+
+      <div class="cc-files" x-show="job && job.status === 'done'">
+        <a
+          class="cc-download-all"
+          x-show="job"
+          :href="job && downloadAllUrl(job.job_id)"
+        ><i class="fa-solid fa-download" aria-hidden="true"></i> Scarica tutto (ZIP)</a>
+        <ul>
+          <template x-for="f in (job ? downloadableFiles(job) : [])" :key="f.key">
+            <li>
+              <a :href="job && fileUrl(job.job_id, f.name)" target="_blank" rel="noopener" x-text="f.name"></a>
+            </li>
+          </template>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Tab mobile -->
+    <div class="cc-mobile-tabs">
+      <button type="button" @click="mobileTab = 'catalogo'" :aria-pressed="mobileTab === 'catalogo'">
+        Catalogo
+      </button>
+      <button type="button" @click="mobileTab = 'selezionate'" :aria-pressed="mobileTab === 'selezionate'">
+        Selezionate (<span x-text="selected.length"></span>)
+      </button>
+    </div>
+
+    <div class="cc-columns">
+      <!-- Colonna sinistra: catalogo filtrabile -->
+      <section class="cc-col cc-col-catalog" :class="{ hidden: mobileTab !== 'catalogo' }">
+        <div class="cc-filters">
+          <input
+            type="search"
+            placeholder="Cerca per titolo, autore, album…"
+            x-model.debounce.200ms="filters.q"
+            @input="resetFiltersAndPage()"
+          />
+          <select x-model="filters.autore" @change="resetFiltersAndPage()">
+            <option value="">Tutti gli autori</option>
+            <template x-for="a in autori" :key="a">
+              <option :value="a" x-text="a"></option>
+            </template>
+          </select>
+          <select x-model="filters.famiglia" @change="resetFiltersAndPage()">
+            <option value="">Tutte le famiglie</option>
+            <template x-for="f in famiglie" :key="f">
+              <option :value="f" x-text="f"></option>
+            </template>
+          </select>
+          <select x-model="filters.momento" @change="resetFiltersAndPage()">
+            <option value="">Tutti i momenti</option>
+            <template x-for="m in momenti" :key="m">
+              <option :value="m" x-text="m"></option>
+            </template>
+          </select>
+          <label class="cc-pagesize">
+            Righe per pagina
+            <select x-model.number="pageSize" @change="changePageSize()">
+              <template x-for="n in pageSizeOptions" :key="n">
+                <option :value="n" x-text="n"></option>
+              </template>
+            </select>
+          </label>
+        </div>
+
+        <div class="cc-bulk-actions">
+          <button type="button" @click="addPickedToSelected()" :disabled="picked.length === 0">
+            <svg class="cc-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z"/></svg>
+            Aggiungi selezionate (<span x-text="picked.length"></span>)
+          </button>
+        </div>
+
+        <div class="cc-table-wrap">
+          <table class="cc-table">
+            <thead>
+              <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    :checked="allVisiblePicked"
+                    @change="toggleSelectAllVisible()"
+                    aria-label="Seleziona tutto il visibile"
+                    title="Seleziona/deseleziona tutte le righe di questa pagina"
+                  />
+                </th>
+                <th @click="setSort('titolo')">
+                  Titolo
+                  <i
+                    class="fa-solid"
+                    x-show="sortKey === 'titolo'"
+                    :class="sortDir === 'asc' ? 'fa-caret-up' : 'fa-caret-down'"
+                    aria-hidden="true"
+                  ></i>
+                </th>
+                <th @click="setSort('autore')">
+                  Autore
+                  <i
+                    class="fa-solid"
+                    x-show="sortKey === 'autore'"
+                    :class="sortDir === 'asc' ? 'fa-caret-up' : 'fa-caret-down'"
+                    aria-hidden="true"
+                  ></i>
+                </th>
+                <th>Famiglia</th>
+                <th>Momenti</th>
+                <th>PDF</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="song in pagedCatalog" :key="song.identificatore">
+                <tr :class="{ 'is-picked': isPicked(song.identificatore) }">
+                  <td>
+                    <input
+                      type="checkbox"
+                      :checked="isPicked(song.identificatore)"
+                      @change="togglePicked(song.identificatore)"
+                      aria-label="Seleziona per aggiunta multipla"
+                    />
+                  </td>
+                  <td x-text="song.titolo"></td>
+                  <td x-text="song.autore"></td>
+                  <td><span class="tag" x-show="song.famiglia" x-text="song.famiglia"></span></td>
+                  <td>
+                    <template x-for="m in momentiOf(song)" :key="m">
+                      <span class="tag" x-text="m"></span>
+                    </template>
+                  </td>
+                  <td>
+                    <a x-show="song.pdf_testo_url" :href="song.pdf_testo_url" target="_blank" rel="noopener" title="PDF solo testo" aria-label="PDF solo testo">
+                      <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+                    </a>
+                    <a x-show="song.pdf_accordi_url" :href="song.pdf_accordi_url" target="_blank" rel="noopener" title="PDF con accordi" aria-label="PDF con accordi">
+                      <i class="fa-solid fa-guitar" aria-hidden="true"></i>
+                    </a>
+                  </td>
+                  <td>
+                    <button type="button" class="cc-add-btn" @click="addSong(song)" title="Aggiungi al canzoniere" aria-label="Aggiungi al canzoniere">
+                      <svg class="cc-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z"/></svg>
+                      <span class="cc-count-badge" x-show="countInSelected(song.identificatore) > 0" x-text="countInSelected(song.identificatore)"></span>
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="!loading && pagedCatalog.length === 0">
+                <td colspan="7" class="muted">Nessuna canzone corrisponde ai filtri.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="cc-pagination" x-show="totalPages > 1">
+          <button type="button" @click="page = Math.max(1, page - 1)" :disabled="page <= 1">
+            <i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Precedente
+          </button>
+          <span>Pagina <span x-text="page"></span> di <span x-text="totalPages"></span> — <span x-text="filteredCatalog.length"></span> risultati</span>
+          <button type="button" @click="page = Math.min(totalPages, page + 1)" :disabled="page >= totalPages">
+            Successiva <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+          </button>
+        </div>
+      </section>
+
+      <!-- Colonna destra: selezione corrente -->
+      <aside class="cc-col cc-col-selected" :class="{ hidden: mobileTab !== 'selezionate' }">
+        <div class="cc-selected-header">
+          <h2>Il tuo canzoniere (<span x-text="selected.length"></span>)</h2>
+          <button
+            type="button"
+            class="cc-clear-btn"
+            @click="clearSelected()"
+            :disabled="selected.length === 0"
+          >
+            <i class="fa-solid fa-trash-can" aria-hidden="true"></i> Svuota il canzoniere
+          </button>
+        </div>
+        
+        <button class="cc-generate-btn" type="button" :disabled="selected.length === 0" @click="openModal()">
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          Genera canzoniere
+        </button>
+
+        <p class="muted" x-show="selected.length === 0">Nessuna canzone selezionata ancora: aggiungine dal catalogo.</p>
+
+        <ul class="cc-selected-list">
+          <template x-for="(song, index) in selected" :key="song.uid">
+            <li
+              draggable="true"
+              @dragstart="onDragStart(index)"
+              @dragover="onDragOver(index, $event)"
+              @drop="onDrop(index)"
+            >
+              <span class="cc-drag-handle" title="Trascina per riordinare">
+                <i class="fa-solid fa-grip-vertical" aria-hidden="true"></i>
+              </span>
+              <div class="cc-reorder-btns">
+                <button type="button" @click="moveUp(index)" :disabled="index === 0" aria-label="Sposta su">
+                  <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
+                </button>
+                <button type="button" @click="moveDown(index)" :disabled="index === selected.length - 1" aria-label="Sposta giù">
+                  <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div class="cc-selected-info">
+                <div class="titolo" x-text="song.titolo"></div>
+                <div class="autore" x-text="song.autore"></div>
+              </div>
+              <div class="cc-semitoni">
+                <label :for="'semitoni-' + song.uid">semitoni</label>
+                <div class="cc-semitoni-control">
+                  <button
+                    type="button"
+                    class="cc-semitoni-btn"
+                    @click="song.semitoni--"
+                    aria-label="Diminuisci semitoni"
+                  ><svg class="cc-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M432 256c0 17.7-14.3 32-32 32L48 288c-17.7 0-32-14.3-32-32s14.3-32 32-32l352 0c17.7 0 32 14.3 32 32z"/></svg></button>
+                  <input
+                    :id="'semitoni-' + song.uid"
+                    type="number"
+                    x-model.number="song.semitoni"
+                    step="1"
+                  />
+                  <button
+                    type="button"
+                    class="cc-semitoni-btn"
+                    @click="song.semitoni++"
+                    aria-label="Aumenta semitoni"
+                  ><svg class="cc-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z"/></svg></button>
+                </div>
+              </div>
+              <button class="cc-remove" type="button" @click="removeSong(song.uid)" aria-label="Rimuovi">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+              </button>
+            </li>
+          </template>
+        </ul>
+
+        
+      </aside>
+    </div>
+
+    <!-- Modale opzioni -->
+    <div class="cc-modal-overlay" x-show="modalOpen" x-cloak @click.self="closeModal()">
+      <div class="cc-modal" @click.stop>
+        <h2>Opzioni del canzoniere</h2>
+        <form @submit.prevent="submitGenerate()">
+          <div class="cc-field">
+            <label for="opt-titoletto">Titoletto (sopra il titolo)</label>
+            <input id="opt-titoletto" type="text" x-model="options.titoletto" placeholder="Es. Parrocchia di San Marco" />
+          </div>
+          <div class="cc-field">
+            <label for="opt-titolo">Titolo</label>
+            <input id="opt-titolo" type="text" x-model="options.titolo" />
+          </div>
+          <div class="cc-field">
+            <label for="opt-sottotitolo">Sottotitolo</label>
+            <input id="opt-sottotitolo" type="text" x-model="options.sottotitolo" />
+          </div>
+
+          <div class="cc-row2">
+            <div class="cc-field">
+              <label for="opt-colonne">Numero colonne</label>
+              <input id="opt-colonne" type="number" min="1" x-model.number="options.num_colonne" />
+            </div>
+            <div class="cc-field">
+              <label for="opt-formato">Formato</label>
+              <select id="opt-formato" x-model="options.formato">
+                <template x-for="opt in formatoOptions" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+
+          <div class="cc-field">
+            <label for="opt-accordi">Versioni PDF da generare</label>
+            <select id="opt-accordi" x-model="options.accordi" required>
+              <option value="lyric">Solo testo</option>
+              <option value="chorded">Solo accordi</option>
+              <option value="both">entrambi i canzonieri in 2 file separati</option>
+            </select>
+          </div>
+
+          <div class="cc-row2">
+            <div class="cc-field">
+              <label for="opt-font">Font</label>
+              <select id="opt-font" x-model="options.font">
+                <template x-for="opt in fontOptions" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+            </div>
+            <div class="cc-field">
+              <label for="opt-minorsign">Notazione accordi minori</label>
+              <select id="opt-minorsign" x-model="options.minorsign">
+                <template x-for="opt in minorsignOptions" :key="opt.value">
+                  <option :value="opt.value" x-text="opt.label"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+
+          <div class="cc-field">
+            <label>Indici</label>
+            <div class="cc-checks">
+              <label>
+                <input type="checkbox" :checked="options.indici.includes('titleindex')" @change="toggleIndice('titleindex')" />
+                Per titolo
+              </label>
+              <label>
+                <input type="checkbox" :checked="options.indici.includes('authorsindex')" @change="toggleIndice('authorsindex')" />
+                Per autore
+              </label>
+              <label>
+                <input type="checkbox" :checked="options.indici.includes('tematicindex')" @change="toggleIndice('tematicindex')" />
+                Tematico (per momento)
+              </label>
+            </div>
+          </div>
+
+          <div class="cc-field">
+            <label class="cc-checkbox-label">
+              <input id="opt-copertina" type="checkbox" x-model="options.copertina" />
+              Includi copertina
+            </label>
+          </div>
+
+          <div class="cc-field">
+            <label>Consegna del risultato</label>
+            <div class="cc-checks">
+              <label><input type="radio" value="email" x-model="options.deliveryMode" /> Ricevi via email</label>
+              <label><input type="radio" value="download" x-model="options.deliveryMode" /> Scarica direttamente</label>
+            </div>
+          </div>
+
+          <div class="cc-field" x-show="options.deliveryMode === 'email'">
+            <label for="opt-email">Indirizzo email</label>
+            <input id="opt-email" type="email" x-model="options.email" placeholder="tuo@indirizzo.it" />
+          </div>
+          <p class="muted" x-show="options.deliveryMode === 'download'" style="font-size:0.8rem;">
+            Funziona solo se lo storage è abilitato lato server: se dopo l'invio non compaiono file da
+            scaricare, riprova scegliendo "Ricevi via email".
+          </p>
+
+          <p class="cc-error" x-show="submitError" x-text="submitError"></p>
+
+          <div class="cc-modal-actions">
+            <button type="button" @click="closeModal()">Annulla</button>
+            <button type="submit" :disabled="submitting">
+              <span x-show="!submitting">Genera</span>
+              <span x-show="submitting">Invio in corso…</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<script>
+  import '../scripts/creacanzoniere.js';
+</script>

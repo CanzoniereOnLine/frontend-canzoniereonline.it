@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const posts = (await getCollection('notizie', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()
+);
+---
+
+<BaseLayout title="Notizie">
+  <h1>Notizie</h1>
+  <ul class="song-list">
+    {posts.map((post) => (
+      <li>
+        <a class="titolo" href={`/notizie/${post.slug}`}>{post.data.title}</a>
+        <div class="autore">
+          {post.data.pubDate.toLocaleDateString('it-IT')}
+          {post.data.tags.map((t) => (
+            <a class="tag" href={`/notizie/tag/${encodeURIComponent(t)}`}>{t}</a>
+          ))}
+        </div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

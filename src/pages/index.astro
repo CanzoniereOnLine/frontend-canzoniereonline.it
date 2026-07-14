@@ -1,0 +1,82 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SearchBox from '../components/SearchBox.astro';
+---
+
+<BaseLayout title="Canzoniereonline - homepage" rawTitle description="Un sistema semplice, veloce e gratuito per creare dei canzonieri.">
+  <section class="home-hero">
+    <h1>Benvenuti in canzoniereonline.it</h1>
+    <p class="home-lede">
+      Un sistema semplice, veloce e gratuito per creare dei canzonieri!
+    </p>
+
+    <div class="home-cta">
+      <SearchBox size="large" id="home-search" placeholder="Titolo, autore, album…" />
+      <a class="home-cta-btn" href="/creacanzoniere">
+        <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+        Crea il tuo canzoniere
+      </a>
+    </div>
+
+    <p class="home-note">
+      Dopo un po' di anni abbiamo trovato il tempo per ammodernare un po' il sito. Alcune cose
+      sono ancora in costruzione, quindi perdonate soprattutto la grafica e l'organizzazione del
+      sito, che nelle prossime settimane potrebbero cambiare un po', speriamo in meglio.
+    </p>
+
+    <p class="home-note">
+      Se vuoi saperne di più, che tu sia appassionato di LaTeX, incuriosito dal funzionamento del
+      sito o semplicemente curioso, nella <a href="/documentazione">documentazione</a> trovi
+      qualche informazione in più! <span class="muted">(in costruzione…)</span>
+    </p>
+  </section>
+</BaseLayout>
+
+<style>
+  .home-hero {
+    padding: 3.5rem 0 3rem;
+    text-align: center;
+  }
+
+  .home-hero h1 {
+    margin-top: 0;
+    font-size: 2.6rem;
+  }
+
+  .home-lede {
+    color: var(--color-muted);
+    font-size: 1.25rem;
+    max-width: 36rem;
+    margin: 0 auto 2.2rem;
+  }
+
+  .home-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.1rem;
+    max-width: 34rem;
+    margin: 0 auto;
+  }
+
+  .home-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    background: var(--color-accent);
+    color: white;
+    text-decoration: none;
+    font-size: 1.15rem;
+    font-weight: 600;
+    padding: 0.85em 1.7em;
+    border-radius: 0.6rem;
+  }
+  .home-cta-btn:hover { background: var(--color-text); text-decoration: none; }
+
+  .home-note {
+    color: var(--color-muted);
+    max-width: 38rem;
+    margin: 1.8rem auto 0;
+    font-size: 1.05rem;
+  }
+</style>

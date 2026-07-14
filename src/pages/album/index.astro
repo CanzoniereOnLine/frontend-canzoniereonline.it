@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAlbums, getAlbumSlugIndex } from '../../lib/api';
+
+const albums = await getAlbums();
+const { toSlug } = await getAlbumSlugIndex();
+---
+
+<BaseLayout title="Album">
+  <h1>Album</h1>
+  <p class="muted" style="color:var(--color-muted); font-size:0.9rem;">
+    Elenco derivato dal catalogo (l'API non espone un endpoint dedicato per gli album).
+  </p>
+  <ul class="song-list">
+    {albums.map((a) => (
+      <li><a href={`/album/${toSlug.get(a)}`}>{a}</a></li>
+    ))}
+  </ul>
+</BaseLayout>

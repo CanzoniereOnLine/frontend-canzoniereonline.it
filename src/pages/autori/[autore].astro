@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAutoriSlugIndex, getSongsByAutore } from '../../lib/api';
+
+export async function getStaticPaths() {
+  const { toName } = await getAutoriSlugIndex();
+  return Array.from(toName.entries()).map(([slug, autore]) => ({
+    params: { autore: slug },
+    props: { autore },
+  }));
+}
+
+const { autore } = Astro.props;
+// /songs/autore/:autore fa un match parziale: usiamo il nome esatto restituito
+// da /autori quindi qui otteniamo comunque le canzoni corrette di quell'autore.
+const canzoni = await getSongsByAutore(autore);
+---
+
+<BaseLayout title={autore}>
+  <h1>{autore}</h1>
+  <ul class="song-list">
+    {canzoni.map((c) => (
+      <li>
+        <a class="titolo" href={`/canzoni/singola/${encodeURIComponent(c.identificatore)}`}>
+          {c.titolo}
+        </a>
+        {c.album && <div class="autore">{c.album}</div>}
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

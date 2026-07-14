@@ -1,0 +1,33 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('notizie');
+  const tags = new Set<string>();
+  posts.forEach((p) => p.data.tags.forEach((t) => tags.add(t)));
+  return Array.from(tags).map((tag) => ({
+    params: { tag },
+    props: {
+      posts: posts
+        .filter((p) => p.data.tags.includes(tag))
+        .sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf()),
+    },
+  }));
+}
+
+const { tag } = Astro.params;
+const { posts } = Astro.props;
+---
+
+<BaseLayout title={`Tag: ${tag}`}>
+  <h1>Notizie taggate “{tag}”</h1>
+  <ul class="song-list">
+    {posts.map((post) => (
+      <li>
+        <a class="titolo" href={`/notizie/${post.slug}`}>{post.data.title}</a>
+        <div class="autore">{post.data.pubDate.toLocaleDateString('it-IT')}</div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

@@ -1,0 +1,125 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCatalog, splitMomenti, type SongSummary } from '../lib/api';
+
+const catalog = await getCatalog();
+
+function groupBy(items: SongSummary[], keyFn: (s: SongSummary) => string[]) {
+  const map = new Map<string, SongSummary[]>();
+  for (const item of items) {
+    for (const key of keyFn(item)) {
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+    }
+  }
+  return Array.from(map.entries())
+    .sort((a, b) => a[0].localeCompare(b[0], 'it', { sensitivity: 'base' }))
+    .map(([key, songs]) => [
+      key,
+      songs.sort((a, b) => a.titolo.localeCompare(b.titolo, 'it', { sensitivity: 'base' })),
+    ]) as [string, SongSummary[]][];
+}
+
+const perLettera = groupBy(catalog, (s) => [
+  (s.titolo?.[0] ?? '#').toUpperCase(),
+]);
+const perMomento = groupBy(catalog, (s) => splitMomenti(s.momenti));
+const perAutore = groupBy(catalog, (s) => [s.autore || 'Sconosciuto']);
+
+const groupings: { key: string; label: string; data: [string, SongSummary[]][] }[] = [
+  { key: 'lettera', label: 'Alfabetico', data: perLettera },
+  { key: 'momento', label: 'Per momento', data: perMomento },
+  { key: 'autore', label: 'Per autore', data: perAutore },
+];
+---
+
+<BaseLayout title="Indice completo">
+  <h1>Indice completo</h1>
+
+  <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-bottom:1rem; font-family: var(--font-sans);">
+    {groupings.map((g, i) => (
+      <button
+        class="btn-toggle-group"
+        data-target={g.key}
+        aria-pressed={i === 0 ? 'true' : 'false'}
+      >
+        {g.label}
+      </button>
+    ))}
+  </div>
+
+  <input
+    type="search"
+    id="indice-filter"
+    placeholder="Filtra l'indice…"
+    aria-label="Filtra l'indice"
+    style="width:100%; padding:0.6rem 0.8rem; margin-bottom:1.5rem; border:1px solid var(--color-border); border-radius:0.4rem; font-family: var(--font-sans);"
+  />
+
+  {groupings.map((g, i) => (
+    <section class="grouping" data-grouping={g.key} class:list={{ hidden: i !== 0 }}>
+      {g.data.map(([label, songs]) => (
+        <details class="group" open>
+          <summary>{label} <span class="muted" style="color:var(--color-muted); font-weight:400;">({songs.length})</span></summary>
+          <ul class="song-list">
+            {songs.map((s) => (
+              <li data-titolo={s.titolo.toLowerCase()} data-autore={(s.autore || '').toLowerCase()}>
+                <a class="titolo" href={`/canzoni/singola/${encodeURIComponent(s.identificatore)}`}>
+                  {s.titolo}
+                </a>
+                <div class="autore">{s.autore}</div>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ))}
+    </section>
+  ))}
+</BaseLayout>
+
+<script>
+  // Toggle tra le tre modalità di raggruppamento (dati già pronti nel markup:
+  // nessuna richiesta di rete necessaria).
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.btn-toggle-group');
+  const sections = document.querySelectorAll<HTMLElement>('.grouping');
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      buttons.forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      sections.forEach((s) => {
+        s.classList.toggle('hidden', s.dataset.grouping !== btn.dataset.target);
+      });
+    });
+  });
+
+  // Filtro di ricerca: nasconde le righe non corrispondenti e apre/nasconde
+  // i gruppi di conseguenza, su tutti e tre i raggruppamenti contemporaneamente.
+  const filterInput = document.getElementById('indice-filter') as HTMLInputElement | null;
+  const params = new URLSearchParams(window.location.search);
+  const initialQ = params.get('q');
+  if (filterInput && initialQ) filterInput.value = initialQ;
+
+  function applyFilter(query: string) {
+    const q = query.trim().toLowerCase();
+    document.querySelectorAll<HTMLElement>('details.group').forEach((group) => {
+      let visibleCount = 0;
+      group.querySelectorAll<HTMLLIElement>('li').forEach((li) => {
+        const match =
+          !q ||
+          (li.dataset.titolo?.includes(q) ?? false) ||
+          (li.dataset.autore?.includes(q) ?? false);
+        li.classList.toggle('hidden', !match);
+        if (match) visibleCount++;
+      });
+      group.classList.toggle('hidden', visibleCount === 0);
+      if (q) group.setAttribute('open', '');
+    });
+  }
+
+  if (filterInput) {
+    if (initialQ) applyFilter(initialQ);
+    filterInput.addEventListener('input', () => applyFilter(filterInput.value));
+  }
+</script>

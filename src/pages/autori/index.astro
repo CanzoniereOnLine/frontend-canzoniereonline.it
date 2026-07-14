@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAutori, getAutoriSlugIndex } from '../../lib/api';
+
+const autori = await getAutori();
+const { toSlug } = await getAutoriSlugIndex();
+---
+
+<BaseLayout title="Autori">
+  <h1>Autori</h1>
+  <ul class="song-list">
+    {autori.map((a) => (
+      <li>
+        <a href={`/autori/${toSlug.get(a)}`}>{a}</a>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

@@ -1,0 +1,20 @@
+---
+import { SITE_TITLE } from '../consts';
+import SearchBox from './SearchBox.astro';
+---
+
+<header class="site-header">
+  <div class="container row">
+    <a class="brand" href="/">{SITE_TITLE}</a>
+    <nav>
+      <a href="/indice">Indice</a>
+      <a href="/autori">Autori</a>
+      <a href="/momenti">Momenti</a>
+      <a href="/album">Album</a>
+      <a href="/notizie">Notizie</a>
+      <a href="/documentazione">Documentazione</a>
+      <a href="/creacanzoniere">Crea canzoniere</a>
+    </nav>
+    <SearchBox size="compact" id="header-search" />
+  </div>
+</header>

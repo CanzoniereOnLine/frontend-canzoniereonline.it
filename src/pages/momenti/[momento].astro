@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getMomentiSlugIndex, getSongsByMomento } from '../../lib/api';
+
+export async function getStaticPaths() {
+  const { toName } = await getMomentiSlugIndex();
+  return Array.from(toName.entries()).map(([slug, momento]) => ({
+    params: { momento: slug },
+    props: { momento },
+  }));
+}
+
+const { momento } = Astro.props;
+// Il match su /songs/momento/:momento è case-sensitive: usiamo il valore
+// esatto restituito da /momenti, quindi è già coerente.
+const canzoni = await getSongsByMomento(momento);
+---
+
+<BaseLayout title={momento}>
+  <h1>{momento}</h1>
+  <ul class="song-list">
+    {canzoni.map((c) => (
+      <li>
+        <a class="titolo" href={`/canzoni/singola/${encodeURIComponent(c.identificatore)}`}>
+          {c.titolo}
+        </a>
+        <div class="autore">{c.autore}</div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getMomenti, getMomentiSlugIndex } from '../../lib/api';
+
+const momenti = await getMomenti();
+const { toSlug } = await getMomentiSlugIndex();
+---
+
+<BaseLayout title="Momenti">
+  <h1>Momenti</h1>
+  <p style="display:flex; flex-wrap:wrap; gap:0.5rem;">
+    {momenti.map((m) => (
+      <a class="tag" style="font-size:0.95rem; padding:0.4em 0.9em;" href={`/momenti/${toSlug.get(m)}`}>
+        {m}
+      </a>
+    ))}
+  </p>
+</BaseLayout>

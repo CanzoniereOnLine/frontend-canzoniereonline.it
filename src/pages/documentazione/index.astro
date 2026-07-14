@@ -1,0 +1,30 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const pages = (await getCollection('documentazione')).sort((a, b) => a.data.order - b.data.order);
+
+const sections = new Map<string, typeof pages>();
+for (const p of pages) {
+  const key = p.data.section ?? 'Generale';
+  if (!sections.has(key)) sections.set(key, [] as any);
+  (sections.get(key) as any).push(p);
+}
+---
+
+<BaseLayout title="Documentazione">
+  <h1>Documentazione</h1>
+  {Array.from(sections.entries()).map(([section, items]) => (
+    <>
+      <h2>{section}</h2>
+      <ul class="song-list">
+        {items.map((p: any) => (
+          <li>
+            <a class="titolo" href={`/documentazione/${p.slug}`}>{p.data.title}</a>
+            {p.data.description && <div class="autore">{p.data.description}</div>}
+          </li>
+        ))}
+      </ul>
+    </>
+  ))}
+</BaseLayout>

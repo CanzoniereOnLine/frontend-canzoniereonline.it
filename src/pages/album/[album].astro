@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getAlbumSlugIndex, getSongsByAlbum } from '../../lib/api';
+
+export async function getStaticPaths() {
+  const { toName } = await getAlbumSlugIndex();
+  return Array.from(toName.entries()).map(([slug, album]) => ({
+    params: { album: slug },
+    props: { album },
+  }));
+}
+
+const { album } = Astro.props;
+const canzoni = await getSongsByAlbum(album);
+---
+
+<BaseLayout title={album}>
+  <h1>{album}</h1>
+  <ul class="song-list">
+    {canzoni.map((c) => (
+      <li>
+        <a class="titolo" href={`/canzoni/singola/${encodeURIComponent(c.identificatore)}`}>
+          {c.titolo}
+        </a>
+        <div class="autore">{c.autore}</div>
+      </li>
+    ))}
+  </ul>
+</BaseLayout>

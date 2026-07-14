@@ -1,0 +1,64 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { getCatalog, getSong, splitMomenti, getMomentiSlugIndex, normalizeSlug } from '../../../lib/api';
+
+export async function getStaticPaths() {
+  const catalog = await getCatalog();
+  return catalog.map((s) => ({ params: { id: s.identificatore } }));
+}
+
+const { id } = Astro.params;
+const song = await getSong(id as string);
+const momenti = splitMomenti(song.momenti);
+const { toSlug: momentoSlug } = await getMomentiSlugIndex();
+
+// "Estratto": mostriamo solo le prime righe del testo semplice, non il testo
+// completo (che resta disponibile nei PDF collegati).
+const righeTesto = song.testo_semplice ? song.testo_semplice.split('\n') : [];
+const estratto = righeTesto.slice(0, 8).join('\n');
+const troncato = righeTesto.length > 8;
+---
+
+<BaseLayout title={song.titolo} description={`${song.titolo} — ${song.autore}`}>
+  <article>
+    <h1>{song.titolo}</h1>
+    <p class="autore" style="font-family: var(--font-sans); color: var(--color-muted);">
+      {song.autore}
+      {song.album && <> · {song.album}</>}
+      {song.tonalita && <> · tonalità {song.tonalita}</>}
+    </p>
+
+    <p>
+      {song.famiglia && <span class="badge">{song.famiglia}</span>}
+      {momenti.map((m) => (
+        <a class="tag" href={`/momenti/${momentoSlug.get(m) ?? normalizeSlug(m)}`}>{m}</a>
+      ))}
+    </p>
+
+    {estratto && (
+      <>
+        
+        <pre style="white-space: pre-wrap; font-family: var(--font-serif); font-size: 1rem;">{song.testo_semplice}</pre>
+        {troncato && (
+          <p class="muted" style="color: var(--color-muted); font-size: 0.9rem;">
+            Testo generato automaticamente a partire dal sorgente latex - usate i pdf per vedere il testo completo
+          </p>
+        )}
+      </>
+    )}
+
+    <p style="display:flex; gap:1rem; flex-wrap:wrap; margin-top:1.5rem;">
+      {song.pdf_testo_url && (
+        <a href={song.pdf_testo_url} target="_blank" rel="noopener">📄 PDF solo testo</a>
+      )}
+      {song.pdf_accordi_url && (
+        <a href={song.pdf_accordi_url} target="_blank" rel="noopener">🎸 PDF con accordi</a>
+      )}
+      {!song.pdf_testo_url && !song.pdf_accordi_url && (
+        <span class="muted" style="color: var(--color-muted);">
+          PDF non ancora disponibili per questa canzone.
+        </span>
+      )}
+    </p>
+  </article>
+</BaseLayout>

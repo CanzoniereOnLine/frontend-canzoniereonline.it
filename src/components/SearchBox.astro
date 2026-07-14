@@ -1,0 +1,120 @@
+---
+interface Props {
+  size?: 'compact' | 'large';
+  placeholder?: string;
+  id?: string;
+}
+const { size = 'compact', placeholder = 'Cerca una canzone…', id = 'search' } = Astro.props;
+---
+
+<form class={`search-form search-form--${size}`} id={`${id}-form`} role="search" autocomplete="off">
+  <input
+    type="search"
+    id={`${id}-input`}
+    name="q"
+    placeholder={placeholder}
+    aria-label="Cerca una canzone"
+  />
+  <div class="search-results" id={`${id}-results`}></div>
+</form>
+
+<style>
+  .search-form--large { width: 100%; max-width: 34rem; margin: 0 auto; }
+  .search-form--large input {
+    padding: 0.9rem 1.1rem;
+    font-size: 1.1rem;
+    border-radius: 0.6rem;
+  }
+</style>
+
+<script define:vars={{ id }}>
+  // Ogni istanza del componente si registra da sé: import dinamico condiviso
+  // fa sì che Fuse.js e l'indice vengano scaricati una sola volta per pagina
+  // anche se ci sono più SearchBox (caso raro, ma innocuo).
+  window.__initCanzoniereSearch?.(id);
+</script>
+
+<script>
+  import Fuse from 'fuse.js';
+
+  interface IndexEntry {
+    id: string;
+    titolo: string;
+    autore: string;
+    album: string;
+    momenti: string;
+    famiglia: string;
+    tonalita: string;
+  }
+
+  let fusePromise: Promise<Fuse<IndexEntry>> | null = null;
+  function ensureIndex() {
+    if (!fusePromise) {
+      fusePromise = fetch('/search-index.json')
+        .then((r) => r.json())
+        .then(
+          (data: IndexEntry[]) =>
+            new Fuse(data, {
+              keys: ['titolo', 'autore', 'album', 'momenti'],
+              threshold: 0.35,
+              minMatchCharLength: 2,
+            })
+        );
+    }
+    return fusePromise;
+  }
+
+  function render(box: HTMLDivElement, items: IndexEntry[]) {
+    if (items.length === 0) {
+      box.innerHTML = '<div class="muted" style="padding:0.6rem;">Nessun risultato</div>';
+    } else {
+      box.innerHTML = items
+        .slice(0, 8)
+        .map(
+          (s) =>
+            `<a href="/canzoni/singola/${encodeURIComponent(s.id)}">${s.titolo}<br><span class="muted">${s.autore || ''}</span></a>`
+        )
+        .join('');
+    }
+    box.classList.add('is-open');
+  }
+
+  function initInstance(id: string) {
+    const form = document.getElementById(`${id}-form`) as HTMLFormElement | null;
+    const input = document.getElementById(`${id}-input`) as HTMLInputElement | null;
+    const box = document.getElementById(`${id}-results`) as HTMLDivElement | null;
+    if (!form || !input || !box) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout>;
+    input.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const q = input.value.trim();
+      if (q.length < 2) {
+        box.classList.remove('is-open');
+        return;
+      }
+      debounceTimer = setTimeout(async () => {
+        const fuse = await ensureIndex();
+        render(box, fuse.search(q).map((r) => r.item));
+      }, 120);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!form.contains(e.target as Node)) box.classList.remove('is-open');
+    });
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (q) window.location.href = `/indice?q=${encodeURIComponent(q)}`;
+    });
+  }
+
+  // Espone l'init globalmente così ogni istanza del componente (define:vars sopra)
+  // può auto-registrarsi senza duplicare il download di Fuse.js.
+  (window as any).__initCanzoniereSearch = initInstance;
+  document.querySelectorAll('form[id$="-form"]').forEach((f) => {
+    const id = f.id.replace(/-form$/, '');
+    initInstance(id);
+  });
+</script>
