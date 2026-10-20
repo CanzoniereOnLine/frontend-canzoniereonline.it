@@ -104,6 +104,33 @@ export async function getSongsByAlbum(album: string): Promise<SongSummary[]> {
   return catalog.filter((s) => s.album?.trim() === album);
 }
 
+// Recupera il dettaglio completo (incluso `testo_completo`/`testo_semplice`/
+// `data_revisione`) di *tutte* le canzoni del catalogo. Sfrutta la cache di
+// getSong(): se le pagine /canzoni/singola/:id hanno già richiesto (o
+// richiedono in parallelo, nello stesso processo di build) lo stesso
+// identificatore, qui non viene fatta nessuna chiamata di rete aggiuntiva.
+// Usata dalla pagina /canzoni per l'estratto di testo nelle "schede" e per il
+// riquadro "Ultime modifiche".
+let _allSongsDetailedPromise: Promise<Song[]> | null = null;
+export function getAllSongsDetailed(): Promise<Song[]> {
+  if (!_allSongsDetailedPromise) {
+    _allSongsDetailedPromise = getCatalog().then((catalog) =>
+      Promise.all(catalog.map((s) => getSong(s.identificatore)))
+    );
+  }
+  return _allSongsDetailedPromise;
+}
+
+// Ordina le canzoni per data di revisione decrescente (le più recenti prima).
+// Le canzoni senza una data valida vengono spostate in fondo, non scartate.
+export function sortByRevisioneDesc(songs: Song[]): Song[] {
+  const time = (s: Song) => {
+    const t = s.data_revisione ? new Date(s.data_revisione).getTime() : NaN;
+    return Number.isNaN(t) ? -Infinity : t;
+  };
+  return songs.slice().sort((a, b) => time(b) - time(a));
+}
+
 export function splitMomenti(momenti: string | null | undefined): string[] {
   return (momenti ?? '')
     .split(';')
@@ -180,6 +207,7 @@ export function getMomentiSlugIndex(): Promise<SlugIndex> {
 // server-only, l'API ha CORS aperto e nessuna autenticazione.
 
 export type Accordi = 'lyric' | 'chorded' | 'both';
+export type Copertina = 'cover' | 'nocover';
 export type Indice = 'titleindex' | 'authorsindex' | 'tematicindex' | (string & {});
 
 export interface CanzonieSong {
@@ -197,7 +225,7 @@ export interface CanzonieRequest {
   font?: string;
   minorsign?: string;
   indici?: Indice[];
-  copertina?: string;
+  copertina: Copertina; // sempre esplicito, come "accordi": vedi nota nella documentazione API
   email?: string; // obbligatoria solo per createCanzoniereEmail
   canzoni: CanzonieSong[];
 }
@@ -282,6 +310,26 @@ export function s3FileUrl(jobId: string, filename: string): string {
 
 export function s3DownloadAllUrl(jobId: string): string {
   return `${API_BASE}/s3/${encodeURIComponent(jobId)}/download`;
+}
+
+// Il payload originale inviato per generare il canzoniere (stesso corpo di
+// CanzonieRequest) viene salvato dal backend come "payload.json" nella
+// stessa cartella S3 degli altri file del job. Recuperarlo permette di
+// ripristinare canzoni e opzioni di un job creato anche da un altro
+// dispositivo/browser (non solo da una copia locale).
+export async function getJobPayload(jobId: string): Promise<CanzonieRequest> {
+  const res = await fetch(s3FileUrl(jobId, 'payload.json'));
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404
+        ? 'Nessun canzoniere trovato per questo ID.'
+        : `Errore ${res.status} nel recupero del canzoniere.`
+    );
+  }
+  const data = await res.json().catch(() => {
+    throw new Error('Il canzoniere salvato per questo ID non è leggibile.');
+  });
+  return data as CanzonieRequest;
 }
 
 export const JOB_STATUS_STEPS: { key: JobStatusValue; label: string }[] = [

@@ -11,15 +11,24 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 
     <details class="cc-resume">
       <summary>Riprendi un canzoniere esistente</summary>
-      <form @submit.prevent="checkJob(resumeJobId)">
+      <p class="muted cc-resume-hint">
+        Incolla l'ID (job_id) che ti era stato mostrato quando hai generato un canzoniere: le
+        canzoni selezionate e le opzioni verranno ricaricate così puoi continuare da dove avevi
+        interrotto, anche da un altro dispositivo.
+      </p>
+      <form @submit.prevent="resumeJob(resumeJobId)">
         <input
           type="text"
           x-model="resumeJobId"
           placeholder="Incolla qui l'ID del job (job_id)"
           aria-label="ID del job da riprendere"
         />
-        <button type="submit">Verifica stato</button>
+        <button type="submit" :disabled="resuming">
+          <span x-show="!resuming">Ricarica canzoniere</span>
+          <span x-show="resuming">Recupero in corso…</span>
+        </button>
       </form>
+      <p class="cc-success" x-show="resumeMessage" x-text="resumeMessage"></p>
       <p class="cc-error" x-show="resumeError" x-text="resumeError"></p>
     </details>
 
@@ -46,11 +55,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
       <p class="cc-error" x-show="jobError" x-text="jobError"></p>
 
       <div class="cc-files" x-show="job && job.status === 'done'">
-        <a
+        <button
+          type="button"
           class="cc-download-all"
-          x-show="job"
-          :href="job && downloadAllUrl(job.job_id)"
-        ><i class="fa-solid fa-download" aria-hidden="true"></i> Scarica tutto (ZIP)</a>
+          @click="downloadAll(job)"
+          :disabled="zipping"
+        >
+          <i class="fa-solid" :class="zipping ? 'fa-spinner fa-spin' : 'fa-download'" aria-hidden="true"></i>
+          <span x-show="!zipping">Scarica tutto (ZIP)</span>
+          <span x-show="zipping">Preparazione ZIP…</span>
+        </button>
+        <p class="cc-zip-note">Lo ZIP viene creato qui nel browser unendo i singoli file, senza passare da un altro server.</p>
+        <p class="cc-error" x-show="zipError" x-text="zipError"></p>
         <ul>
           <template x-for="f in (job ? downloadableFiles(job) : [])" :key="f.key">
             <li>
@@ -149,8 +165,8 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                 </th>
                 <th>Famiglia</th>
                 <th>Momenti</th>
-                <th>PDF</th>
-                <th></th>
+                <th class="cc-col-pdf">PDF</th>
+                <th class="cc-col-add"></th>
               </tr>
             </thead>
             <tbody>
@@ -172,7 +188,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                       <span class="tag" x-text="m"></span>
                     </template>
                   </td>
-                  <td>
+                  <td class="cc-col-pdf">
                     <a x-show="song.pdf_testo_url" :href="song.pdf_testo_url" target="_blank" rel="noopener" title="PDF solo testo" aria-label="PDF solo testo">
                       <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
                     </a>
@@ -180,7 +196,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
                       <i class="fa-solid fa-guitar" aria-hidden="true"></i>
                     </a>
                   </td>
-                  <td>
+                  <td class="cc-col-add">
                     <button type="button" class="cc-add-btn" @click="addSong(song)" title="Aggiungi al canzoniere" aria-label="Aggiungi al canzoniere">
                       <svg class="cc-icon" viewBox="0 0 448 512" aria-hidden="true" focusable="false"><path fill="currentColor" d="M256 80c0-17.7-14.3-32-32-32s-32 14.3-32 32V224H48c-17.7 0-32 14.3-32 32s14.3 32 32 32H192V432c0 17.7 14.3 32 32 32s32-14.3 32-32V288H400c17.7 0 32-14.3 32-32s-14.3-32-32-32H256V80z"/></svg>
                       <span class="cc-count-badge" x-show="countInSelected(song.identificatore) > 0" x-text="countInSelected(song.identificatore)"></span>

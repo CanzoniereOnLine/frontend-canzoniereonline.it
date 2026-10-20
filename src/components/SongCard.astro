@@ -1,0 +1,83 @@
+---
+interface Props {
+  identificatore: string;
+  titolo: string;
+  autore?: string;
+  album?: string;
+  tonalita?: string;
+  famiglia?: string;
+  momenti?: string[];
+  excerpt?: string;
+  pdfTestoUrl?: string;
+  pdfAccordiUrl?: string;
+  /** Lettera "normalizzata" (senza accenti, A-Z oppure '#') usata dal filtro alfabetico lato client. */
+  letterKey?: string;
+}
+
+const {
+  identificatore,
+  titolo,
+  autore = '',
+  album = '',
+  tonalita = '',
+  famiglia = '',
+  momenti = [],
+  excerpt = '',
+  pdfTestoUrl,
+  pdfAccordiUrl,
+  letterKey,
+} = Astro.props;
+
+const href = `/canzoni/singola/${encodeURIComponent(identificatore)}`;
+---
+
+<article
+  class="song-card"
+  data-titolo={titolo.toLowerCase()}
+  data-autore={autore.toLowerCase()}
+  data-letter={letterKey ?? (titolo[0] ?? '#').toUpperCase()}
+>
+  <h3 class="song-card-title"><a href={href}>{titolo}</a></h3>
+  <p class="song-card-meta">
+    {autore}
+    {album && <> · {album}</>}
+    {tonalita && <> · tonalità {tonalita}</>}
+  </p>
+
+  {(famiglia || momenti.length > 0) && (
+    <p class="song-card-tags">
+      {famiglia && <span class="badge">{famiglia}</span>}
+      {momenti.map((m) => (
+        <span class="tag">{m}</span>
+      ))}
+    </p>
+  )}
+
+  {excerpt && <p class="song-card-excerpt">{excerpt}…</p>}
+
+  <div class="song-card-actions">
+    {pdfTestoUrl && (
+      <button
+        type="button"
+        class="song-card-pdf-btn"
+        data-pdf-url={pdfTestoUrl}
+        aria-expanded="false"
+      >
+        <i class="fa-solid fa-file-lines" aria-hidden="true"></i> Vedi PDF (testo)
+      </button>
+    )}
+    {pdfAccordiUrl && (
+      <button
+        type="button"
+        class="song-card-pdf-btn"
+        data-pdf-url={pdfAccordiUrl}
+        aria-expanded="false"
+      >
+        <i class="fa-solid fa-guitar" aria-hidden="true"></i> Vedi PDF (accordi)
+      </button>
+    )}
+    <a class="song-card-more" href={href}>Scheda completa</a>
+  </div>
+
+  <div class="song-card-pdf-preview" hidden></div>
+</article>

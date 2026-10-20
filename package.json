@@ -10,7 +10,8 @@
   "dependencies": {
     "astro": "^4.15.0",
     "fuse.js": "^7.0.0",
-    "alpinejs": "^3.14.0"
+    "alpinejs": "^3.14.0",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/alpinejs": "^3.13.10"

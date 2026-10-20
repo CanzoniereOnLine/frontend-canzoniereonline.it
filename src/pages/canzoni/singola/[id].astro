@@ -13,7 +13,7 @@ const momenti = splitMomenti(song.momenti);
 const { toSlug: momentoSlug } = await getMomentiSlugIndex();
 
 // "Estratto": mostriamo solo le prime righe del testo semplice, non il testo
-// completo (che resta disponibile nei PDF collegati).
+// completo (che resta disponibile nei PDF collegati e, in LaTeX, qui sotto).
 const righeTesto = song.testo_semplice ? song.testo_semplice.split('\n') : [];
 const estratto = righeTesto.slice(0, 8).join('\n');
 const troncato = righeTesto.length > 8;
@@ -21,7 +21,7 @@ const troncato = righeTesto.length > 8;
 
 <BaseLayout title={song.titolo} description={`${song.titolo} — ${song.autore}`}>
   <article>
-    <h1>{song.titolo}</h1>
+    <h1 class="portal-title">{song.titolo}</h1>
     <p class="autore" style="font-family: var(--font-sans); color: var(--color-muted);">
       {song.autore}
       {song.album && <> · {song.album}</>}
@@ -37,11 +37,11 @@ const troncato = righeTesto.length > 8;
 
     {estratto && (
       <>
-        
-        <pre style="white-space: pre-wrap; font-family: var(--font-serif); font-size: 1rem;">{song.testo_semplice}</pre>
+        <pre style="white-space: pre-wrap; font-family: var(--font-serif); font-size: 1rem;">{estratto}</pre>
         {troncato && (
           <p class="muted" style="color: var(--color-muted); font-size: 0.9rem;">
-            Testo generato automaticamente a partire dal sorgente latex - usate i pdf per vedere il testo completo
+            Testo generato automaticamente a partire dal sorgente LaTeX — usate i PDF, oppure il codice
+            LaTeX completo qui sotto, per il testo integrale.
           </p>
         )}
       </>
@@ -60,5 +60,84 @@ const troncato = righeTesto.length > 8;
         </span>
       )}
     </p>
+
+    {song.testo_completo && (
+      <div class="latex-panel-wrapper">
+        <button
+          type="button"
+          class="latex-toggle"
+          id="latex-toggle"
+          aria-expanded="false"
+          aria-controls="latex-panel"
+        >
+          <i class="fa-solid fa-code" aria-hidden="true"></i>
+          <span class="latex-toggle-label">Visualizza LaTeX completo</span>
+        </button>
+
+        <div class="latex-panel" id="latex-panel" hidden>
+          <div class="latex-panel-header">
+            <span>Codice LaTeX — {song.titolo}</span>
+            <button type="button" class="latex-copy-btn" id="latex-copy-btn">
+              <i class="fa-solid fa-copy" aria-hidden="true"></i>
+              <span id="latex-copy-label">Copia</span>
+            </button>
+          </div>
+          <pre class="latex-source"><code id="latex-source">{song.testo_completo}</code></pre>
+        </div>
+      </div>
+    )}
   </article>
 </BaseLayout>
+
+<script>
+  // Mostra/nasconde il codice LaTeX completo, e ne permette la copia. Il
+  // pulsante "Copia" legge .textContent del blocco <code>: prende quindi
+  // *solo* il testo del codice, scartando qualunque tag o attributo di
+  // stile HTML che possa trovarsi nel markup circostante.
+  const toggleBtn = document.getElementById('latex-toggle') as HTMLButtonElement | null;
+  const toggleLabel = toggleBtn?.querySelector('.latex-toggle-label') ?? null;
+  const panel = document.getElementById('latex-panel') as HTMLElement | null;
+  const copyBtn = document.getElementById('latex-copy-btn') as HTMLButtonElement | null;
+  const copyLabel = document.getElementById('latex-copy-label');
+  const source = document.getElementById('latex-source');
+
+  toggleBtn?.addEventListener('click', () => {
+    if (!panel) return;
+    const willOpen = panel.hidden;
+    panel.hidden = !willOpen;
+    toggleBtn.setAttribute('aria-expanded', String(willOpen));
+    if (toggleLabel) {
+      toggleLabel.textContent = willOpen ? 'Nascondi il codice LaTeX' : 'Visualizza LaTeX completo';
+    }
+  });
+
+  copyBtn?.addEventListener('click', async () => {
+    if (!source) return;
+    const text = source.textContent ?? '';
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Fallback per contesti senza Clipboard API (es. pagina servita non in HTTPS).
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    if (copyBtn && copyLabel) {
+      copyBtn.classList.add('is-copied');
+      copyLabel.textContent = 'Copiato!';
+      setTimeout(() => {
+        copyBtn.classList.remove('is-copied');
+        copyLabel.textContent = 'Copia';
+      }, 1800);
+    }
+  });
+</script>
+
+<style>
+  .latex-panel-wrapper { margin-top: 1.8rem; }
+</style>

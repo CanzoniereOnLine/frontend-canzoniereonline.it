@@ -1,4 +1,5 @@
 import Alpine from 'alpinejs';
+import JSZip from 'jszip';
 import {
   getCatalog,
   getAutori,
@@ -8,12 +9,17 @@ import {
   createCanzoniereEmail,
   createCanzoniereDownload,
   getJobStatus,
+  getJobPayload,
   s3FileUrl,
-  s3DownloadAllUrl,
   JOB_STATUS_STEPS,
 } from '../lib/api';
 
 const LAST_JOB_KEY = 'canzoniere:last-job-id';
+// Prefisso per il payload (canzoni selezionate + opzioni) salvato in
+// localStorage per ogni job creato da questo browser: l'API non offre un
+// endpoint per recuperare il contenuto originale di un job già inviato,
+// quindi "riprendere" un canzoniere si basa su questa copia locale.
+const JOB_PAYLOAD_KEY_PREFIX = 'canzoniere:job-payload:';
 const POLL_INTERVAL_MS = 2500;
 const RESUME_RETRY_MS = 700;
 const RESUME_MAX_RETRIES = 4;
@@ -29,7 +35,7 @@ function defaultOptions() {
     font: 'libertine',
     minorsign: '',
     indici: ['titleindex', 'authorsindex'],
-    copertina: true, // checkbox: true -> 'cover', false -> nessuna copertina
+    copertina: true, // checkbox: true -> 'cover', false -> 'nocover' (valore sempre esplicito, come per "accordi": l'API non assume un default se il campo è assente)
     deliveryMode: 'email', // 'email' | 'download'
     email: '',
   };
@@ -58,6 +64,58 @@ const MINORSIGN_OPTIONS = [
 
 // Righe per pagina selezionabili dall'utente nella tabella del catalogo.
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
+
+// Salva in localStorage lo "stato compositivo" del canzoniere (canzoni
+// selezionate + opzioni del modale) associato a un job_id, così da poterlo
+// ricaricare in seguito con resumeJob(). Fallisce silenziosamente se lo
+// storage non è disponibile (es. navigazione privata) o è pieno: non è un
+// dato critico, solo una comodità per riprendere il lavoro.
+function saveJobPayload(jobId, { selected, options }) {
+  try {
+    window.localStorage.setItem(
+      JOB_PAYLOAD_KEY_PREFIX + jobId,
+      JSON.stringify({ selected, options, saved_at: new Date().toISOString() })
+    );
+  } catch (e) {
+    console.warn('Impossibile salvare il canzoniere in locale:', e);
+  }
+}
+
+// Legge il payload salvato per un job_id, se presente. Ritorna `null` se non
+// è mai stato salvato in questo browser (es. dispositivo diverso, cache del
+// browser svuotata, oppure job creato prima di questo aggiornamento).
+function loadJobPayload(jobId) {
+  try {
+    const raw = window.localStorage.getItem(JOB_PAYLOAD_KEY_PREFIX + jobId);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.warn('Impossibile leggere il canzoniere salvato in locale:', e);
+    return null;
+  }
+}
+
+// Converte il payload così come inviato all'API (CanzonieRequest, salvato
+// dal backend come payload.json) nell'oggetto `options` usato dal modale.
+function remotePayloadToOptions(data) {
+  return {
+    ...defaultOptions(),
+    titoletto: data.titoletto || '',
+    titolo: data.titolo || 'Canzoniere',
+    sottotitolo: data.sottotitolo || '',
+    num_colonne: Number(data.num_colonne) || 1,
+    formato: data.formato || 'standard',
+    accordi: data.accordi || 'both',
+    font: data.font || 'libertine',
+    minorsign: data.minorsign || '',
+    indici: Array.isArray(data.indici) ? data.indici : [],
+    copertina: data.copertina === 'cover',
+    // Il payload salvato non distingue esplicitamente la modalità di
+    // consegna: la deduciamo dalla presenza dell'email (obbligatoria solo
+    // per l'invio via email).
+    deliveryMode: data.email ? 'email' : 'download',
+    email: data.email || '',
+  };
+}
 
 Alpine.data('canzoniereApp', () => ({
   // --- stato catalogo ---
@@ -104,8 +162,14 @@ Alpine.data('canzoniereApp', () => ({
   job: null,
   jobError: null,
   polling: false,
+  // "Scarica tutto": lo ZIP viene composto lato client (vedi downloadAll()),
+  // non affidandosi a un endpoint dedicato lato server per l'intero job.
+  zipping: false,
+  zipError: null,
   resumeJobId: '',
   resumeError: null,
+  resumeMessage: null,
+  resuming: false,
   steps: JOB_STATUS_STEPS,
 
   async init() {
@@ -132,7 +196,7 @@ Alpine.data('canzoniereApp', () => ({
     const fromUrl = params.get('job');
     if (fromUrl) {
       this.resumeJobId = fromUrl;
-      this.checkJob(fromUrl);
+      this.resumeJob(fromUrl);
     } else {
       const last = window.localStorage.getItem(LAST_JOB_KEY);
       if (last) this.resumeJobId = last;
@@ -333,7 +397,7 @@ Alpine.data('canzoniereApp', () => ({
       font: this.options.font || undefined,
       minorsign: this.options.minorsign || undefined,
       indici: this.options.indici,
-      copertina: this.options.copertina ? 'cover' : undefined,
+      copertina: this.options.copertina ? 'cover' : 'nocover',
       canzoni: this.selected.map((s) => ({
         identificatore: s.identificatore,
         semitoni: Number(s.semitoni) || 0,
@@ -360,6 +424,7 @@ Alpine.data('canzoniereApp', () => ({
           : await createCanzoniereDownload(payload);
 
       window.localStorage.setItem(LAST_JOB_KEY, accepted.job_id);
+      saveJobPayload(accepted.job_id, { selected: this.selected, options: this.options });
       this.modalOpen = false;
       this.jobError = null;
       this.job = {
@@ -402,21 +467,75 @@ Alpine.data('canzoniereApp', () => ({
     }
   },
 
-  // Verifica manuale di un job_id inserito dall'utente (ripresa canzoniere).
-  async checkJob(jobIdParam) {
-    const jobId = (jobIdParam || this.resumeJobId || '').trim();
-    if (!jobId) return;
-    this.resumeError = null;
+  // Ricostruisce l'elenco `selected` a partire dall'elenco `canzoni` del
+  // payload (che contiene solo identificatore + semitoni), recuperando
+  // titolo/autore dal catalogo già caricato in pagina.
+  buildSelectedFromCanzoni(canzoni) {
+    const catalogById = new Map(this.catalog.map((s) => [s.identificatore, s]));
+    return (canzoni || []).map((c) => {
+      const song = catalogById.get(c.identificatore);
+      this.uidCounter += 1;
+      return {
+        uid: this.uidCounter,
+        identificatore: c.identificatore,
+        titolo: song ? song.titolo : `Canzone non più nel catalogo (${c.identificatore})`,
+        autore: song ? song.autore : '',
+        semitoni: Number(c.semitoni) || 0,
+      };
+    });
+  },
+
+  applyResumedPayload(selected, options, extraNote) {
+    this.selected = selected;
+    this.options = options;
+    this.job = null;
     this.jobError = null;
+    this.mobileTab = 'selezionate';
+    const n = selected.length;
+    this.resumeMessage =
+      `Canzoniere ripristinato: ${n} canzon${n === 1 ? 'e' : 'i'} ricaricat${n === 1 ? 'a' : 'e'}. ` +
+      'Puoi continuare a modificarlo.' +
+      (extraNote ? ` ${extraNote}` : '');
+  },
+
+  // Ripresa di un canzoniere da un job_id inserito dall'utente. Il payload
+  // originale (canzoni + opzioni) viene recuperato da "payload.json",
+  // salvato dal backend nella stessa cartella S3 degli altri file del job:
+  // funziona quindi anche da un dispositivo/browser diverso da quello con
+  // cui è stato creato il job. Se il recupero remoto fallisce (job creato
+  // prima di questa funzionalità, problemi di rete...) si tenta un
+  // fallback sulla copia salvata in locale da questo stesso browser.
+  async resumeJob(jobIdParam) {
+    const jobId = (jobIdParam || this.resumeJobId || '').trim();
+    this.resumeError = null;
+    this.resumeMessage = null;
+    if (!jobId) return;
+
+    this.resuming = true;
+    window.localStorage.setItem(LAST_JOB_KEY, jobId);
     try {
-      const status = await getJobStatus(jobId);
-      this.job = status;
-      window.localStorage.setItem(LAST_JOB_KEY, jobId);
-      if (status.status !== 'done' && status.status !== 'error' && !this.polling) {
-        this.pollJob(jobId, 0);
-      }
+      const data = await getJobPayload(jobId);
+      const selected = this.buildSelectedFromCanzoni(data.canzoni);
+      const options = remotePayloadToOptions(data);
+      this.applyResumedPayload(selected, options);
     } catch (e) {
-      this.resumeError = e instanceof Error ? e.message : String(e);
+      const local = loadJobPayload(jobId);
+      if (local) {
+        const selected = (local.selected || []).map((s) => {
+          this.uidCounter += 1;
+          return { ...s, uid: this.uidCounter };
+        });
+        const options = { ...defaultOptions(), ...(local.options || {}) };
+        this.applyResumedPayload(
+          selected,
+          options,
+          '(recuperato dalla copia locale di questo browser, non dal server)'
+        );
+      } else {
+        this.resumeError = e instanceof Error ? e.message : String(e);
+      }
+    } finally {
+      this.resuming = false;
     }
   },
 
@@ -443,8 +562,62 @@ Alpine.data('canzoniereApp', () => ({
     return s3FileUrl(jobId, filename);
   },
 
-  downloadAllUrl(jobId) {
-    return s3DownloadAllUrl(jobId);
+  // "Scarica tutto (ZIP)": non esiste (o non è affidabile) un endpoint
+  // lato server che impacchetti l'intero job in un solo file, quindi lo
+  // ZIP viene composto qui nel browser: si scaricano i singoli PDF (che
+  // funzionano già, sono gli stessi link elencati sotto al bottone) e si
+  // uniscono con JSZip, poi si offre il risultato come un normale
+  // download tramite un link temporaneo con l'attributo `download`.
+  async downloadAll(job) {
+    if (!job || this.zipping) return;
+    const files = this.downloadableFiles(job);
+    if (files.length === 0) {
+      this.zipError = 'Nessun file da scaricare per questo canzoniere.';
+      return;
+    }
+
+    this.zipping = true;
+    this.zipError = null;
+    let objectUrl = null;
+    try {
+      const zip = new JSZip();
+      await Promise.all(
+        files.map(async (f) => {
+          const res = await fetch(this.fileUrl(job.job_id, f.name));
+          if (!res.ok) {
+            throw new Error(`Impossibile scaricare "${f.name}" (errore ${res.status}).`);
+          }
+          const blob = await res.blob();
+          zip.file(f.name, blob);
+        })
+      );
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const base =
+        (this.options.titolo || 'canzoniere')
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '') || 'canzoniere';
+
+      objectUrl = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = `${base}-${job.job_id}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      this.zipError =
+        (e instanceof Error ? e.message : String(e)) +
+        ' Puoi comunque scaricare i singoli file qui sotto.';
+    } finally {
+      this.zipping = false;
+      // Il download è avviato in modo sincrono da a.click(): un piccolo
+      // ritardo prima di revocare l'URL evita che il browser lo invalidi
+      // mentre sta ancora leggendo il Blob.
+      if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+    }
   },
 }));
 

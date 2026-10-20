@@ -60,7 +60,7 @@ const groupings: { key: string; label: string; data: [string, SongSummary[]][] }
   {groupings.map((g, i) => (
     <section class="grouping" data-grouping={g.key} class:list={{ hidden: i !== 0 }}>
       {g.data.map(([label, songs]) => (
-        <details class="group" open>
+        <details class="group">
           <summary>{label} <span class="muted" style="color:var(--color-muted); font-weight:400;">({songs.length})</span></summary>
           <ul class="song-list">
             {songs.map((s) => (

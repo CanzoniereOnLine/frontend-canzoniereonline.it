@@ -1,0 +1,380 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SongCard from '../../components/SongCard.astro';
+import {
+  getCatalog,
+  getAllSongsDetailed,
+  sortByRevisioneDesc,
+  splitMomenti,
+  normalizeSlug,
+  getMomentiSlugIndex,
+  getAutoriSlugIndex,
+  getAlbumSlugIndex,
+  type SongSummary,
+} from '../../lib/api';
+
+// Catalogo "leggero" (per i raggruppamenti di sinistra e le schede) e
+// dettaglio completo di ogni canzone (per l'estratto di testo e la data di
+// revisione). getAllSongsDetailed() riusa la cache di getSong(): se le
+// pagine /canzoni/singola/:id la richiedono comunque, qui non si aggiunge
+// nessuna chiamata di rete in più — solo più canzoni da tenere in memoria.
+const [catalog, songs] = await Promise.all([getCatalog(), getAllSongsDetailed()]);
+
+const { toSlug: momentoSlug } = await getMomentiSlugIndex();
+const { toSlug: autoreSlug } = await getAutoriSlugIndex();
+const { toSlug: albumSlug } = await getAlbumSlugIndex();
+
+function countBy(items: SongSummary[], keyFn: (s: SongSummary) => string[]): [string, number][] {
+  const map = new Map<string, number>();
+  for (const item of items) {
+    for (const key of keyFn(item)) {
+      if (!key) continue;
+      map.set(key, (map.get(key) ?? 0) + 1);
+    }
+  }
+  return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], 'it', { sensitivity: 'base' }));
+}
+
+const momentiCounts = countBy(catalog, (s) => splitMomenti(s.momenti));
+const autoriCounts = countBy(catalog, (s) => [s.autore || 'Sconosciuto']);
+const albumCounts = countBy(catalog, (s) => [s.album?.trim() ?? '']);
+
+function letterKeyOf(titolo: string): string {
+  const ch = (titolo || '').trim().charAt(0);
+  if (!ch) return '#';
+  const normalized = ch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  return /[A-Z]/.test(normalized) ? normalized : '#';
+}
+
+const ALPHABET = ['#', ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split('')];
+const lettersWithSongs = new Set(catalog.map((s) => letterKeyOf(s.titolo)));
+
+function shortExcerpt(text: string | undefined, maxLines = 2): string {
+  if (!text) return '';
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  return lines.slice(0, maxLines).join(' ');
+}
+
+const excerptById = new Map(songs.map((s) => [s.identificatore, shortExcerpt(s.testo_semplice)]));
+
+function formatDate(value?: string): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+const ultimeModifiche = sortByRevisioneDesc(songs).slice(0, 15);
+
+const sortedCatalog = catalog
+  .slice()
+  .sort((a, b) => a.titolo.localeCompare(b.titolo, 'it', { sensitivity: 'base' }));
+---
+
+<BaseLayout title="Le canzoni" description="Sfoglia tutte le canzoni del catalogo, per momento liturgico, autore o album.">
+  <h1 class="portal-title">Le canzoni</h1>
+
+  <div class="portal-columns">
+    <aside class="portal-rail-left">
+      <section class="portal-box">
+        <h2 class="portal-box-title">Momenti liturgici</h2>
+        <div class="portal-box-body portal-box-scroll">
+          {momentiCounts.length === 0 ? (
+            <p class="portal-box-empty">Nessun momento disponibile.</p>
+          ) : (
+            <ul class="portal-box-list">
+              {momentiCounts.map(([m, count]) => (
+                <li>
+                  <a href={`/momenti/${momentoSlug.get(m) ?? normalizeSlug(m)}`}>{m}</a>
+                  {' '}<span class="count">({count})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+
+      <section class="portal-box">
+        <h2 class="portal-box-title">Autori</h2>
+        <div class="portal-box-body portal-box-scroll">
+          <ul class="portal-box-list">
+            {autoriCounts.map(([a, count]) => (
+              <li>
+                {autoreSlug.has(a) ? (
+                  <a href={`/autori/${autoreSlug.get(a)}`}>{a}</a>
+                ) : (
+                  <span>{a}</span>
+                )}
+                {' '}<span class="count">({count})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+
+      <section class="portal-box">
+        <h2 class="portal-box-title">Album</h2>
+        <div class="portal-box-body portal-box-scroll">
+          {albumCounts.length === 0 ? (
+            <p class="portal-box-empty">Nessun album disponibile.</p>
+          ) : (
+            <ul class="portal-box-list">
+              {albumCounts.map(([al, count]) => (
+                <li>
+                  <a href={`/album/${albumSlug.get(al) ?? normalizeSlug(al)}`}>{al}</a>
+                  {' '}<span class="count">({count})</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    </aside>
+
+    <section class="portal-main" id="canzoni-main">
+      <div class="alpha-nav" role="group" aria-label="Filtra per iniziale">
+        {ALPHABET.map((letter) => (
+          <button type="button" data-letter={letter} disabled={!lettersWithSongs.has(letter)} aria-pressed="false">
+            {letter}
+          </button>
+        ))}
+      </div>
+
+      <div class="canzoni-search">
+        <input
+          type="search"
+          id="canzoni-search"
+          placeholder="Filtra per titolo o autore…"
+          aria-label="Filtra per titolo o autore"
+        />
+      </div>
+
+      <p class="active-filter-chip" id="active-filter-chip">
+        <span id="active-filter-label"></span>
+        <button type="button" id="active-filter-clear">Rimuovi filtro ×</button>
+      </p>
+
+      <p class="canzoni-count" id="canzoni-count">{sortedCatalog.length} canzoni in catalogo</p>
+
+      <div id="canzoni-cards">
+        {sortedCatalog.map((s) => (
+          <SongCard
+            identificatore={s.identificatore}
+            titolo={s.titolo}
+            autore={s.autore}
+            album={s.album}
+            tonalita={s.tonalita}
+            famiglia={s.famiglia}
+            momenti={splitMomenti(s.momenti)}
+            excerpt={excerptById.get(s.identificatore)}
+            pdfTestoUrl={s.pdf_testo_url}
+            pdfAccordiUrl={s.pdf_accordi_url}
+            letterKey={letterKeyOf(s.titolo)}
+          />
+        ))}
+      </div>
+
+      <nav class="portal-pagination" id="canzoni-pagination" aria-label="Paginazione canzoni"></nav>
+    </section>
+
+    <aside class="portal-rail-right">
+      <section class="portal-box">
+        <h2 class="portal-box-title">Ultime modifiche</h2>
+        <div class="portal-box-body">
+          {ultimeModifiche.length === 0 ? (
+            <p class="portal-box-empty">Nessuna data di revisione disponibile.</p>
+          ) : (
+            <ul class="latest-edits-list">
+              {ultimeModifiche.map((s) => (
+                <li>
+                  <span class="titolo">
+                    <a href={`/canzoni/singola/${encodeURIComponent(s.identificatore)}`}>{s.titolo}</a>
+                  </span>
+                  <span class="meta">
+                    {s.autore}
+                    {s.data_revisione && ` · ${formatDate(s.data_revisione)}`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    </aside>
+  </div>
+</BaseLayout>
+
+<script>
+  // Filtro (testo + iniziale) e paginazione della colonna centrale: tutto sui
+  // dati già presenti nel markup, nessuna richiesta di rete aggiuntiva.
+  const PAGE_SIZE = 20;
+
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('.song-card'));
+  const searchInput = document.getElementById('canzoni-search') as HTMLInputElement | null;
+  const countEl = document.getElementById('canzoni-count');
+  const paginationEl = document.getElementById('canzoni-pagination');
+  const chipEl = document.getElementById('active-filter-chip');
+  const chipLabelEl = document.getElementById('active-filter-label');
+  const chipClearBtn = document.getElementById('active-filter-clear');
+  const alphaButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.alpha-nav button'));
+
+  let query = '';
+  let activeLetter: string | null = null;
+  let page = 1;
+
+  const params = new URLSearchParams(window.location.search);
+  const initialQ = params.get('q');
+  if (initialQ && searchInput) {
+    searchInput.value = initialQ;
+    query = initialQ.trim().toLowerCase();
+  }
+
+  function matches(card: HTMLElement): boolean {
+    const titolo = card.dataset.titolo || '';
+    const autore = card.dataset.autore || '';
+    if (activeLetter && card.dataset.letter !== activeLetter) return false;
+    if (query && !titolo.includes(query) && !autore.includes(query)) return false;
+    return true;
+  }
+
+  function renderPagination(totalPages: number) {
+    if (!paginationEl) return;
+    paginationEl.innerHTML = '';
+    if (totalPages <= 1) return;
+
+    const addBtn = (label: string, target: number, opts: { disabled?: boolean; current?: boolean } = {}) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = label;
+      if (opts.current) btn.setAttribute('aria-current', 'true');
+      if (opts.disabled) btn.disabled = true;
+      btn.addEventListener('click', () => {
+        page = target;
+        render();
+        document.getElementById('canzoni-main')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      paginationEl.appendChild(btn);
+    };
+
+    addBtn('« Precedente', Math.max(1, page - 1), { disabled: page === 1 });
+    const windowSize = 2;
+    let lastShown = 0;
+    for (let p = 1; p <= totalPages; p++) {
+      if (p === 1 || p === totalPages || Math.abs(p - page) <= windowSize) {
+        if (p - lastShown > 1) {
+          const span = document.createElement('span');
+          span.textContent = '…';
+          span.style.padding = '0 0.3rem';
+          paginationEl.appendChild(span);
+        }
+        addBtn(String(p), p, { current: p === page });
+        lastShown = p;
+      }
+    }
+    addBtn('Successiva »', Math.min(totalPages, page + 1), { disabled: page === totalPages });
+  }
+
+  function render() {
+    const filtered = cards.filter(matches);
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    if (page > totalPages) page = totalPages;
+    const start = (page - 1) * PAGE_SIZE;
+    const visible = new Set(filtered.slice(start, start + PAGE_SIZE));
+
+    cards.forEach((c) => c.classList.toggle('hidden', !visible.has(c)));
+
+    if (countEl) {
+      countEl.textContent =
+        filtered.length === 0
+          ? 'Nessuna canzone corrisponde ai filtri.'
+          : `${filtered.length} canzon${filtered.length === 1 ? 'e' : 'i'} trovate`;
+    }
+
+    renderPagination(totalPages);
+
+    if (chipEl && chipLabelEl) {
+      if (activeLetter) {
+        chipLabelEl.textContent = `Iniziale: ${activeLetter}`;
+        chipEl.classList.add('is-visible');
+      } else {
+        chipEl.classList.remove('is-visible');
+      }
+    }
+
+    alphaButtons.forEach((b) => {
+      b.setAttribute('aria-pressed', String(b.dataset.letter === activeLetter));
+    });
+  }
+
+  searchInput?.addEventListener('input', () => {
+    query = searchInput.value.trim().toLowerCase();
+    activeLetter = null;
+    page = 1;
+    render();
+  });
+
+  alphaButtons.forEach((b) => {
+    b.addEventListener('click', () => {
+      if (b.disabled) return;
+      const letter = b.dataset.letter ?? null;
+      activeLetter = activeLetter === letter ? null : letter;
+      if (searchInput) searchInput.value = '';
+      query = '';
+      page = 1;
+      render();
+    });
+  });
+
+  chipClearBtn?.addEventListener('click', () => {
+    activeLetter = null;
+    page = 1;
+    render();
+  });
+
+  render();
+</script>
+
+<script>
+  // Anteprima PDF direttamente dalla scheda, senza lasciare la pagina:
+  // un solo listener "delegato" invece di uno per ogni scheda/bottone.
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const btn = target.closest<HTMLButtonElement>('.song-card-pdf-btn');
+    if (!btn) return;
+    const card = btn.closest<HTMLElement>('.song-card');
+    if (!card) return;
+    const preview = card.querySelector<HTMLElement>('.song-card-pdf-preview');
+    if (!preview) return;
+
+    const url = btn.dataset.pdfUrl || '';
+    const alreadyOpenSameUrl = !preview.hidden && preview.dataset.url === url;
+
+    // "Testo" e "accordi" sono alternative: chiude sempre l'anteprima
+    // corrente prima di eventualmente aprirne una nuova.
+    card.querySelectorAll<HTMLButtonElement>('.song-card-pdf-btn').forEach((b) => b.setAttribute('aria-expanded', 'false'));
+    preview.hidden = true;
+    preview.textContent = '';
+    delete preview.dataset.url;
+
+    if (alreadyOpenSameUrl) return;
+
+    const iframe = document.createElement('iframe');
+    iframe.src = url;
+    iframe.loading = 'lazy';
+    iframe.title = `Anteprima PDF — ${card.dataset.titolo ?? ''}`;
+
+    const fallback = document.createElement('a');
+    fallback.href = url;
+    fallback.target = '_blank';
+    fallback.rel = 'noopener';
+    fallback.className = 'song-card-pdf-fallback';
+    fallback.textContent = 'Apri il PDF in una nuova scheda';
+
+    preview.appendChild(iframe);
+    preview.appendChild(document.createElement('br'));
+    preview.appendChild(fallback);
+    preview.dataset.url = url;
+    preview.hidden = false;
+    btn.setAttribute('aria-expanded', 'true');
+  });
+</script>

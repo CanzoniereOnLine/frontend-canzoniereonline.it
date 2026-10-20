@@ -106,7 +106,7 @@ const { size = 'compact', placeholder = 'Cerca una canzone…', id = 'search' } 
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const q = input.value.trim();
-      if (q) window.location.href = `/indice?q=${encodeURIComponent(q)}`;
+      if (q) window.location.href = `/canzoni?q=${encodeURIComponent(q)}`;
     });
   }
 

@@ -4,8 +4,6 @@ description: "Il sito rinnovato per cercare canzoni e creare i propri canzonieri
 pubDate: 2026-07-01
 tags: ["annunci", "novità"]
 ---
+Qui dovremmo mettere le **notizie**. Quando cambia qualcosa, se si rompe qualcos'altro... tutte queste cose qui. 
 
-Questo è un post di esempio nella collezione **notizie**. Sostituiscilo o aggiungine altri
-creando nuovi file `.md` in `src/content/notizie/`.
-
-Ogni post supporta tag multipli, visibili nella pagina `/notizie/tag/<tag>`.
+Non abbiamo bene idea di quanto riusciremo a tenerlo aggiornato, ma come spiegato un po' nella documentazione, la nuova architettura dovrebbe rendere la collaborazione un po' più facile! E quindi forse anche le evoluzioni!

@@ -1,10 +1,15 @@
 :root {
-  --color-bg: #ffffff;
-  --color-bg-soft: #f2f2f2;
-  --color-text: #181818;
-  --color-muted: #5c5c5c;
-  --color-accent: #202020;
-  --color-border: #dcdcdc;
+  /* Palette "da archivio/innario": carta invecchiata + il rosso mattone
+     già presente nella favicon del sito, non un colore inventato. */
+  --color-bg: #f7f2e7;
+  --color-bg-soft: #ede2cc;
+  --color-bg-panel: #fbf8f1;
+  --color-text: #2e2219;
+  --color-muted: #6b5844;
+  --color-accent: #8a3324;
+  --color-accent-dark: #6d2519;
+  --color-gold: #a9822c;
+  --color-border: #d3c3a4;
   /* Font graziato per i titoli */
   --font-display: 'Playfair Display', Georgia, 'Iowan Old Style', serif;
   /* Font graziato per il testo e per i componenti dell'interfaccia: tutto serif */
@@ -49,11 +54,11 @@ a:hover { text-decoration-thickness: 2px; }
 }
 
 .site-header {
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 3px double var(--color-accent);
   padding: 0.8rem 0;
   position: sticky;
   top: 0;
-  background: var(--color-bg);
+  background: var(--color-bg-panel);
   z-index: 10;
 }
 
@@ -82,7 +87,7 @@ a:hover { text-decoration-thickness: 2px; }
 }
 
 .site-header nav a { color: var(--color-text); text-decoration: none; }
-.site-header nav a:hover { color: var(--color-accent); }
+.site-header nav a:hover { color: var(--color-accent); text-decoration: underline; }
 
 .search-form {
   display: flex;
@@ -134,12 +139,13 @@ a:hover { text-decoration-thickness: 2px; }
 .search-results .muted { color: var(--color-muted); font-size: 0.9rem; }
 
 .site-footer {
-  border-top: 1px solid var(--color-border);
+  border-top: 3px double var(--color-accent);
   margin-top: 3rem;
   padding: 1.5rem 0;
   font-family: var(--font-sans);
   font-size: 0.95rem;
   color: var(--color-muted);
+  background: var(--color-bg-panel);
 }
 
 .tag, .badge {
@@ -209,6 +215,15 @@ details.group summary {
   font-size: 0.95rem;
 }
 
+.cc-success {
+  color: #1f5c2e;
+  background: #f2f7f3;
+  border: 1px solid #cfe3d4;
+  padding: 0.55rem 0.85rem;
+  border-radius: 0.4rem;
+  font-size: 0.95rem;
+}
+
 .cc-resume {
   border: 1px solid var(--color-border);
   border-radius: 0.5rem;
@@ -216,6 +231,10 @@ details.group summary {
   margin-bottom: 1.2rem;
 }
 .cc-resume summary { cursor: pointer; font-weight: 600; }
+.cc-resume-hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.88rem;
+}
 .cc-resume form {
   display: flex;
   gap: 0.5rem;
@@ -372,7 +391,7 @@ details.group summary {
   text-align: left;
   white-space: nowrap;
 }
-.cc-table th { cursor: pointer; user-select: none; background: var(--color-bg-soft); position: sticky; top: 0; }
+.cc-table th { cursor: pointer; user-select: none; background: var(--color-bg-soft); position: sticky; top: 0; z-index: 2; }
 .cc-table tr.is-picked { background: #ececec; }
 .cc-table td .tag { font-size: 0.75rem; padding: 0.12em 0.45em; }
 .cc-table td a {
@@ -382,6 +401,47 @@ details.group summary {
   font-size: 1.05rem;
 }
 .cc-table td a:hover { color: var(--color-accent); }
+
+/* Colonne "PDF" e "+" sempre visibili (sticky a destra), anche su schermi
+   piccoli dove la tabella scorre in orizzontale. La colonna "+" resta
+   ancorata al bordo destro, la colonna "PDF" subito alla sua sinistra. */
+.cc-table th.cc-col-add,
+.cc-table td.cc-col-add {
+  position: sticky;
+  right: 0;
+  width: 3.4rem;
+  min-width: 3.4rem;
+}
+.cc-table th.cc-col-pdf,
+.cc-table td.cc-col-pdf {
+  position: sticky;
+  right: 3.4rem;
+  width: 4.6rem;
+  min-width: 4.6rem;
+}
+/* Sfondo opaco sulle celle ancorate, altrimenti il contenuto delle colonne
+   scorrevoli si vedrebbe "in trasparenza" sotto di esse durante lo scroll. */
+.cc-table td.cc-col-add,
+.cc-table td.cc-col-pdf {
+  background: var(--color-bg);
+  z-index: 1;
+}
+.cc-table tr.is-picked td.cc-col-add,
+.cc-table tr.is-picked td.cc-col-pdf {
+  background: #ececec;
+}
+/* Le celle d'intestazione di queste colonne restano ancorate sia in alto
+   che a destra (angolo fisso): serve uno z-index più alto delle altre. */
+.cc-table th.cc-col-add,
+.cc-table th.cc-col-pdf {
+  z-index: 3;
+}
+/* Piccola ombra per separare visivamente le colonne ancorate dal resto
+   della tabella quando si scorre in orizzontale. */
+.cc-table th.cc-col-pdf,
+.cc-table td.cc-col-pdf {
+  box-shadow: -6px 0 6px -6px rgba(0, 0, 0, 0.18);
+}
 
 .cc-add-btn {
   position: relative;
@@ -588,6 +648,343 @@ details.group summary {
   background: var(--color-accent);
   color: white;
   border-color: var(--color-accent);
+}
+
+/* ---------- Titoli "da portale" (usati nelle pagine con box laterali) ---------- */
+
+.portal-title {
+  margin: 0 0 1.2rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 3px double var(--color-accent);
+}
+
+/* ---------- Layout a tre colonne (pagina /canzoni) ---------- */
+
+.portal-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.6rem;
+  align-items: start;
+}
+.portal-rail-left { order: 2; }
+.portal-main { order: 1; min-width: 0; }
+.portal-rail-right { order: 3; }
+
+@media (min-width: 1000px) {
+  .portal-columns {
+    grid-template-columns: 15.5rem minmax(0, 1fr) 16.5rem;
+  }
+  .portal-rail-left,
+  .portal-main,
+  .portal-rail-right {
+    order: 0;
+  }
+  .portal-rail-left,
+  .portal-rail-right {
+    position: sticky;
+    top: 5.2rem;
+    max-height: calc(100vh - 6.5rem);
+    overflow-y: auto;
+  }
+}
+
+/* Box "da portale": intestazione a fascia colorata sopra un riquadro con
+   bordo netto e ombra "dura" (nessuna sfumatura), come i vecchi moduli
+   laterali di phpBB/Joomla. */
+.portal-box {
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--color-bg-panel);
+  margin-bottom: 1.1rem;
+  box-shadow: 2px 2px 0 var(--color-border);
+}
+.portal-box-title {
+  margin: 0;
+  padding: 0.45rem 0.8rem;
+  background: var(--color-accent-dark);
+  color: #fbf8f1;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--color-gold);
+}
+.portal-box-body { padding: 0.7rem 0.9rem; }
+.portal-box-scroll { max-height: 15rem; overflow-y: auto; }
+.portal-box-empty { color: var(--color-muted); font-size: 0.9rem; margin: 0; }
+
+.portal-box-list { list-style: none; margin: 0; padding: 0; font-size: 0.92rem; }
+.portal-box-list li {
+  padding: 0.32rem 0;
+  border-bottom: 1px dotted var(--color-border);
+}
+.portal-box-list li:last-child { border-bottom: none; }
+.portal-box-list a { color: var(--color-text); text-decoration: none; }
+.portal-box-list a:hover { color: var(--color-accent); text-decoration: underline; }
+.portal-box-list .count { color: var(--color-muted); font-size: 0.85em; }
+
+.alpha-nav { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.alpha-nav button {
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-weight: 700;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.alpha-nav button:hover:not(:disabled) { border-color: var(--color-accent); color: var(--color-accent); }
+.alpha-nav button[aria-pressed="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.alpha-nav button:disabled { opacity: 0.3; cursor: default; }
+
+/* ---------- Colonna centrale: ricerca, filtro attivo, schede ---------- */
+
+.canzoni-search {
+  display: flex;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+}
+.canzoni-search input[type="search"] {
+  flex: 1;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  font-family: var(--font-sans);
+  font-size: 1.02rem;
+  background: var(--color-bg-panel);
+}
+
+.active-filter-chip {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  margin-bottom: 1rem;
+}
+.active-filter-chip.is-visible { display: inline-flex; }
+.active-filter-chip button {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  border-radius: 2px;
+  cursor: pointer;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.canzoni-count {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  margin: 0 0 1rem;
+}
+
+.song-card {
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  background: var(--color-bg-panel);
+  padding: 1.1rem 1.3rem;
+  margin-bottom: 1.1rem;
+  box-shadow: 2px 2px 0 var(--color-border);
+}
+.song-card-title { margin: 0 0 0.15rem; font-size: 1.25rem; }
+.song-card-title a { color: var(--color-text); text-decoration: none; }
+.song-card-title a:hover { color: var(--color-accent); text-decoration: underline; }
+.song-card-meta {
+  margin: 0 0 0.5rem;
+  color: var(--color-muted);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+}
+.song-card-tags { margin: 0 0 0.6rem; }
+.song-card-excerpt {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  color: var(--color-text);
+  background: var(--color-bg-soft);
+  border-left: 3px solid var(--color-gold);
+  padding: 0.55rem 0.85rem;
+  margin: 0 0 0.75rem;
+  white-space: pre-wrap;
+}
+.song-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-sans);
+}
+.song-card-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.4em 0.85em;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  color: var(--color-text);
+}
+.song-card-pdf-btn:hover { border-color: var(--color-accent); }
+.song-card-pdf-btn[aria-expanded="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+.song-card-more { margin-left: auto; font-size: 0.88rem; }
+.song-card-pdf-preview { margin-top: 0.9rem; }
+.song-card-pdf-preview iframe {
+  display: block;
+  width: 100%;
+  height: 32rem;
+  border: 1px solid var(--color-border);
+  background: #fff;
+}
+.song-card-pdf-fallback {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+.song-card.hidden { display: none; }
+
+.portal-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin: 1.6rem 0;
+  font-family: var(--font-sans);
+  flex-wrap: wrap;
+}
+.portal-pagination button {
+  min-width: 2.1rem;
+  padding: 0.4em 0.65em;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: 2px;
+  font-size: 0.9rem;
+}
+.portal-pagination button:hover:not(:disabled) { border-color: var(--color-accent); }
+.portal-pagination button[aria-current="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+  font-weight: 700;
+}
+.portal-pagination button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---------- Riquadro "Ultime modifiche" ---------- */
+
+.latest-edits-list { list-style: none; margin: 0; padding: 0; }
+.latest-edits-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px dotted var(--color-border);
+}
+.latest-edits-list li:last-child { border-bottom: none; }
+.latest-edits-list .titolo { display: block; font-weight: 600; font-size: 0.95rem; }
+.latest-edits-list .titolo a { color: var(--color-text); text-decoration: none; }
+.latest-edits-list .titolo a:hover { color: var(--color-accent); text-decoration: underline; }
+.latest-edits-list .meta {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+/* ---------- Pagina singola canzone: visualizzatore LaTeX ---------- */
+
+.latex-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em 1em;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-soft);
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  color: var(--color-text);
+}
+.latex-toggle:hover { border-color: var(--color-accent); }
+.latex-toggle[aria-expanded="true"] {
+  background: var(--color-accent);
+  color: #fff;
+  border-color: var(--color-accent);
+}
+
+.latex-panel { margin-top: 1rem; }
+.latex-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  background: var(--color-accent-dark);
+  color: #fbf8f1;
+  padding: 0.5rem 0.9rem;
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-variant: small-caps;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--color-gold);
+}
+.latex-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.8em;
+  border: 1px solid var(--color-gold);
+  background: transparent;
+  color: #fbf8f1;
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-variant: normal;
+  letter-spacing: normal;
+}
+.latex-copy-btn:hover { background: var(--color-gold); color: var(--color-accent-dark); }
+.latex-copy-btn.is-copied { background: #3d6b3f; border-color: #3d6b3f; color: #fff; }
+.latex-source {
+  margin: 0;
+  max-height: 34rem;
+  overflow: auto;
+  padding: 1rem 1.2rem;
+  background: #221a13;
+  color: #f1e9d8;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--color-border);
+}
+
+/* ---------- /creacanzoniere: "Scarica tutto" come ZIP lato client ---------- */
+
+.cc-download-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  border: none;
+  font-family: var(--font-sans);
+  font-size: 1rem;
+}
+.cc-download-all:disabled { opacity: 0.6; cursor: wait; }
+.cc-zip-note {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin: 0.3rem 0 0.6rem;
 }
 
 @media (min-width: 900px) {

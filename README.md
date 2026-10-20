@@ -58,7 +58,7 @@ del catalogo serve un rebuild periodico:
 | `/autori`, `/autori/:autore` | `GET /autori`, `GET /songs/autore/:autore` | — |
 | `/momenti`, `/momenti/:momento` | `GET /momenti`, `GET /songs/momento/:momento` | — |
 | `/album`, `/album/:album` | derivati da `GET /search` (no filtri) | L'API non ha un endpoint album dedicato: gli album sono ricavati raggruppando l'intero catalogo |
-| `/indice` | `GET /search` (no filtri) | 3 raggruppamenti precalcolati (alfabetico, momento, autore) con `<details>` nativi + filtro live in JS, senza chiamate di rete |
+| `/canzoni` | `GET /search` + `GET /songs/:id` (una volta per canzone, per estratto e data di revisione) | Layout a tre colonne: momenti/autori/album a sinistra, schede canzone (con estratto e PDF apribile inline) al centro, ultime modifiche a destra. `/indice` reindirizza qui. |
 | `/notizie`, `/notizie/tag/:tag` | `src/content/notizie/*.md` | Content Collection |
 | `/documentazione` | `src/content/documentazione/*.md` | Content Collection, ordinabile con il campo `order` |
 | `/creacanzoniere` | — | **Placeholder**, da costruire in un secondo momento |
@@ -118,10 +118,11 @@ viene salvato per essere riproposto automaticamente alla riapertura della pagina
 - Il flusso "scarica direttamente" (`POST /canzoniere/download` + endpoint `/s3/...`)
   funziona solo se lo storage S3 è abilitato lato server; se non lo è, meglio usare sempre
   "ricevi via email" — la UI lo segnala ma non può verificarlo in anticipo.
-- `formato`, `font`, `copertina` e i valori di `indici` diversi da
+- `formato`, `font` e i valori di `indici` diversi da
   `titleindex`/`authorsindex`/`tematicindex` non sono validati dal backend: si possono
   comunque scrivere come testo libero nei relativi campi, ma vale la pena verificarli con
   chi gestisce il template LaTeX prima di proporli come default agli utenti finali.
+  (`copertina` invece è confermato: valori sempre espliciti `cover`/`nocover`, mai omesso.)
 - Se il catalogo è molto grande, la tabella pagina lato client (25 righe/pagina): senza
   `limit`/`offset` lato server non c'è alternativa a scaricare tutto il catalogo una volta
   e paginare in JS.
