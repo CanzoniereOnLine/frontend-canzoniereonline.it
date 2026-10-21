@@ -1,7 +1,7 @@
 import { defineConfig } from 'astro/config';
 
 export default defineConfig({
-  site: 'https://www.dev.canzoniereonline.it', // TODO: sostituisci con il dominio reale
+  site: 'https://canzoniereonline.it',
   output: 'static',
   build: {
     format: 'directory',
