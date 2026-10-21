@@ -11,9 +11,9 @@ Nel corso degli anni, molte persone ci hanno scritto per chiedere se potevano da
 
 Da un paio d'anni quindi abbiamo cominciato ad immaginare un rinnovo totale. Basta server VPS, si abbraccia una filosofia più _serverless_ - o, meglio, di delega nella gestione dell'infrastruttura - basata su container, si agganciano i servizi direttamente ai repository in modo che il codice sia più trasparente per tutti. Qualche tentativo lo avevamo fatto, ma la strada sembrava comunque molto lunga. Fino a quando, diciamolo chiaramente, non è arrivata l'AI. I piani gratuiti sono stati sufficienti per trasformare le idee - piuttosto chiare - sull'architettura in qualche migliaio di righe di codice. Verboso, non particolarmente elegante in molti suoi tratti, ma funzionante. (Benvenute PR se qualcuno vuole rimettere ordine :) )
 
-Così ora abbiamo il repository delle canzoni, che genera in automatico un db SQLITE quando viene modificato. 
-Un repository dedicato alla parte di backend, scritto in GO, che gira su un container ad hoc con installato una versione super essenziale di LaTeX - giusto quel che serve per compilare i canzonieri, che poi è agganciato ad un'App di digitalocean.
-E infine un repository per la parte di frontend, che viene ospitata da cloudflare.
+Così ora abbiamo il [repository delle canzoni](https://github.com/CanzoniereOnLine/Archivio-Canzoni), che genera in automatico un db SQLITE quando viene modificato. 
+Un [repository dedicato alla parte di backend](https://github.com/CanzoniereOnLine/backend-canzoniereonline.it), scritto in GO, che gira su un container ad hoc con installato una versione super essenziale di LaTeX - giusto quel che serve per compilare i canzonieri, che poi è agganciato ad un'App di digitalocean.
+E infine un [repository per la parte di frontend](https://github.com/CanzoniereOnLine/frontend-canzoniereonline.it), che viene ospitata da cloudflare, scritta senza nessun entusiasmo in astro. 
 
 Tutto estremamente migliorabile, ma tutto finalmente pronto ad accogliere i contributi in maniera trasparente! Se qualcuno vuole modificare qualcosa, se pensa che sarebbe interessante aggiungere una nuova funzione (o una nuova canzone!) può scriverci o scrivere direttamente una PR! Con parsimonia, che conoscendoci non saremo comunque rapidissimi a rispondere, e con prudenza, che tra le cose che non abbiamo ancora implementato è una suite di test per verificare che non ci siano regressioni nel codice al nuovo deploy. 
 
